@@ -68,7 +68,15 @@
   LOG64_SET(F("] "));
 
 
-esp_partition_t *eeprom_q_partition;
+esp_partition_t *eeprom_q_partition = NULL;
+
+// cached values - as else the q is too slow to find first valid record in the table
+uint32_t eeprom_q_first = 0xFFFFFFFF;
+uint32_t eeprom_q_last = 0xFFFFFFFF;
+uint32_t eeprom_q_count = 0xFFFFFFFF;
+uint32_t eeprom_q_del = 0xFFFFFFFF;
+
+uint32_t eeprom_q_table_pos = 0xFFFFFFFF;
 
 inline void eeprom_q_read(uint32_t p, uint8_t buf[], uint32_t size)
 {
@@ -152,33 +160,54 @@ inline uint32_t eeprom_q_find_pos_first_last_count_del()
 // first, last are relatve positions from EEPROM_Q_DATA_START
 inline void eeprom_q_read_first_last_count_del(uint32_t & first, uint32_t & last, uint32_t & count, uint32_t & del)
 {
-  uint32_t p = eeprom_q_find_pos_first_last_count_del();
-
-//  LOG64_SET(F("EEPROM Q: READ FLCD p["));
-//  LOG64_SET((uint32_t)p);
-//  LOG64_SET(F("]"));
-//  LOG64_NEW_LINE;
-
-  if (p == 0xFFFFFFFF)
+  if ((eeprom_q_first == 0xFFFFFFFF) || (eeprom_q_last == 0xFFFFFFFF) || (eeprom_q_count == 0xFFFFFFFF) || (eeprom_q_del == 0xFFFFFFFF))
   {
-    first = 0;
-    last = 0;
-    count = 0;
-    del = 0;
+
+    uint32_t p = eeprom_q_find_pos_first_last_count_del();
+
+
+    //  LOG64_SET(F("EEPROM Q: READ FLCD p["));
+    //  LOG64_SET((uint32_t)p);
+    //  LOG64_SET(F("]"));
+    //  LOG64_NEW_LINE;
+
+    if (p == 0xFFFFFFFF)
+    {
+      first = 0;
+      last = 0;
+      count = 0;
+      del = 0;
+      p = 0;
+    }
+    else
+    {
+      uint32_t b[4];
+      eeprom_q_read(p, (uint8_t *)b, 16);
+      first = b[0];
+      last = b[1];
+      count = b[2];
+      del = b[3];
+    }
+
+
+    eeprom_q_first = first;
+    eeprom_q_last = last;
+    eeprom_q_count = count;
+    eeprom_q_del = del;
+
+    eeprom_q_table_pos = p;
+
+    //  LOG64_SET(F("EEPROM Q: READ FLCD"));
+    //  EEPROM_Q_DUMP;
+    //  LOG64_NEW_LINE;
   }
   else
   {
-    uint32_t b[4];
-    eeprom_q_read(p, (uint8_t *)b, 16);
-    first = b[0];
-    last = b[1];
-    count = b[2];
-    del = b[3];
+    first = eeprom_q_first;
+    last = eeprom_q_last;
+    count = eeprom_q_count;
+    del = eeprom_q_del;
   }
-
-//  LOG64_SET(F("EEPROM Q: READ FLCD"));
-//  EEPROM_Q_DUMP;
-//  LOG64_NEW_LINE;
 }
 
 // first, last are relatve positions from EEPROM_Q_DATA_START
@@ -190,7 +219,16 @@ inline void eeprom_q_write_first_last_count_del(uint32_t first, uint32_t last, u
   b[2] = count;
   b[3] = del;
 
-  uint32_t p = eeprom_q_find_pos_first_last_count_del();
+  uint32_t p;
+  if (eeprom_q_table_pos == 0xFFFFFFFF)
+  {
+    p = eeprom_q_find_pos_first_last_count_del();
+  }
+  else
+  {
+    p = eeprom_q_table_pos;
+  }
+  
   if (p == 0xFFFFFFFF)
   {
     p = 0;
@@ -207,6 +245,12 @@ inline void eeprom_q_write_first_last_count_del(uint32_t first, uint32_t last, u
   }
 
   eeprom_q_write(p, (uint8_t *)b, 16);
+  eeprom_q_first = first;
+  eeprom_q_last = last;
+  eeprom_q_count = count;
+  eeprom_q_del = del;
+
+  eeprom_q_table_pos = p;
 }
 
 /// q inerface implementation
@@ -231,6 +275,10 @@ inline void init_q()
 
 inline void erase_q()
 {
+  if (eeprom_q_partition == NULL)
+  {
+    init_q();
+  }
   eeprom_q_erase(0, EEPROM_Q_PARTITION_SIZE);
 }
 
@@ -421,7 +469,7 @@ inline void add_q_last(uint8_t buf[], uint8_t size)
     LOG64_SET((uint32_t)count);
     LOG64_SET(F("]"));
     LOG64_NEW_LINE;
-    
+
     q_first_remove();
   }
 
