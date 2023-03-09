@@ -1,7 +1,7 @@
 # queue  
 
-Persistent queue implementation for ESP32 stored in user specified partition in flash  
-  
+Persistent queue implementation for ESP32 stored in user specified partition in flash - when no space is available oldest elements are deleted until space is available 
+
 file: queue.ino - test/play/exmaple  
 file: eeprom_queue.h - implementation  
   
@@ -9,6 +9,16 @@ IMPORTANT: Before using please update :
   
 #define EEPROM_Q_PARTIOTION_NAME "spiffs"  
 #define EEPROM_Q_PARTITION_SIZE (32 * 1024)  
+
+IMPORTANT: To get max performance and use of available space it is advisabe to update the Q_TABLE constants to be able to mach the number of average elements that can fit in the EEPROM and potential performance tunings
+
+1. Block Size (EEPROM_Q_BLOCK_SIZE) - need to be multiply of 4K e.g. =  n * ( 4 * 1024) - thsi is per ESP32 EEPROM rules
+Defining bigger block potentially will minimize the delete operations as they are performed every time a space >= Block Size is available to be freed 
+Default 4K
+
+2. Table Size (EEPROM_Q_TABLE_SIZE) - adjust based on max number average size elements that can fit in  EEPROM_Q_PARTITION_SIZE - EEPROM_Q_TABLE_SIZE
+need to multify of EEPROM_Q_BLOCK_SIZE
+Default: 2 * EEPROM_Q_BLOCK_SIZE = 8K - max elements 512
   
 with the propriate values for you storage partition name and partions size in bytes  
   
