@@ -52,7 +52,6 @@
 
 // change if bigger table is required ( to save erase cycles)
 #define EEPROM_Q_TABLE_SIZE (EEPROM_Q_BLOCK_SIZE * 2)
-#define EEPROM_Q_MAX_ELEMENT_COUNT (EEPROM_Q_TABLE_SIZE / 16)
 
 #define EEPROM_Q_DATA_START (EEPROM_Q_TABLE_SIZE)
 #define EEPROM_Q_DATA_SIZE (EEPROM_Q_PARTITION_SIZE - EEPROM_Q_TABLE_SIZE)
@@ -400,72 +399,69 @@ inline void add_q_last(uint8_t buf[], uint8_t size)
 
     eeprom_q_read_first_last_count_del(first, last, count, del);
 
-    // hendle the case when no space in Q_TABLE
-    if (count < EEPROM_Q_MAX_ELEMENT_COUNT)
+    if (first <= last)
     {
-      if (first <= last)
+      if ((last + 1 + size) <= EEPROM_Q_DATA_SIZE)
       {
-        if ((last + 1 + size) <= EEPROM_Q_DATA_SIZE)
+
+        // most easy case
+        uint8_t b[1];
+        b[0] = size;
+        eeprom_q_write(EEPROM_Q_DATA_START + last , b, 1);
+        eeprom_q_write(EEPROM_Q_DATA_START + last + 1, buf, size);
+        last += (1 + size);
+        if (last >= EEPROM_Q_DATA_SIZE)
         {
-
-          // most easy case
-          uint8_t b[1];
-          b[0] = size;
-          eeprom_q_write(EEPROM_Q_DATA_START + last , b, 1);
-          eeprom_q_write(EEPROM_Q_DATA_START + last + 1, buf, size);
-          last += (1 + size);
-          if (last >= EEPROM_Q_DATA_SIZE)
-          {
-            last = 0;
-          }
-
-          // all good - element written - exit
-          break;
+          last = 0;
         }
-        else
-        {
-          uint32_t from_begin = (last + 1 + size) - EEPROM_Q_DATA_SIZE;
-          uint32_t from_end = size - from_begin;
-          if (del >= from_begin)
-          {
-            // there is space
-            uint8_t b[1];
-            b[0] = size;
-            // there si always space for at least one byte - as if the last is the end of the space it will be moved to 0
-            eeprom_q_write( EEPROM_Q_DATA_START + last , b, 1);
-            if (from_end > 0)
-            {
-              eeprom_q_write(EEPROM_Q_DATA_START + last + 1, buf, from_end);
-            }
-            if (from_begin > 0)
-            {
-              eeprom_q_write(EEPROM_Q_DATA_START, &buf[from_end], from_begin);
-            }
-            last = from_begin;
-            // as max msg is 256 and the storage is way bigger no need to check how big is last
 
-            // all good - element written - exit
-            break;
-          }
-        }
+        // all good - element written - exit
+        break;
       }
       else
       {
-        if ((last + 1 + size) <= del)
+        uint32_t from_begin = (last + 1 + size) - EEPROM_Q_DATA_SIZE;
+        uint32_t from_end = size - from_begin;
+        if (del >= from_begin)
         {
           // there is space
           uint8_t b[1];
           b[0] = size;
+          // there si always space for at least one byte - as if the last is the end of the space it will be moved to 0
           eeprom_q_write( EEPROM_Q_DATA_START + last , b, 1);
-          eeprom_q_write( EEPROM_Q_DATA_START + last + 1, buf, size);
-          last += (1 + size);
-          // as max msg is 255 and the storage is way bigger no need to check how big is last
+          if (from_end > 0)
+          {
+            eeprom_q_write(EEPROM_Q_DATA_START + last + 1, buf, from_end);
+          }
+          if (from_begin > 0)
+          {
+            eeprom_q_write(EEPROM_Q_DATA_START, &buf[from_end], from_begin);
+          }
+          last = from_begin;
+          // as max msg is 256 and the storage is way bigger no need to check how big is last
 
           // all good - element written - exit
           break;
         }
       }
     }
+    else
+    {
+      if ((last + 1 + size) <= del)
+      {
+        // there is space
+        uint8_t b[1];
+        b[0] = size;
+        eeprom_q_write( EEPROM_Q_DATA_START + last , b, 1);
+        eeprom_q_write( EEPROM_Q_DATA_START + last + 1, buf, size);
+        last += (1 + size);
+        // as max msg is 255 and the storage is way bigger no need to check how big is last
+
+        // all good - element written - exit
+        break;
+      }
+    }
+
 
     // remove first and try again until there is space
     // as msg in max 255 then space will eb always available for at least one msg
@@ -482,6 +478,4 @@ inline void add_q_last(uint8_t buf[], uint8_t size)
 
   eeprom_q_write_first_last_count_del(first, last, count, del);
 }
-
-
 
